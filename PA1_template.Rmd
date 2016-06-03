@@ -7,19 +7,77 @@ output:
 
 
 ## Loading and preprocessing the data
-
-
+```{r,echo=TRUE}
+require(dplyr)
+require(lattice)
+df <- read.csv2("activity.csv",sep=",")
+df$date = as.Date(df$date)
+df.total <- df %>% filter(!is.na(steps)) %>% 
+  group_by(date) %>% 
+  summarize(
+    s.total = sum(steps))
+```
 
 ## What is mean total number of steps taken per day?
-
+```{r,echo=TRUE}
+hist(df.total$s.total,main="Total Number of Steps taken each day",xlab="Steps for each day")
+mean(df.total$s.total)
+median(df.total$s.total)
+```
 
 
 ## What is the average daily activity pattern?
+```{r,echo=TRUE}
+df.interval <- df %>% filter(!is.na(steps)) %>% group_by(interval) %>% summarize(s.mean = mean(steps),s.tot = sum(steps))
+xyplot(type="l",df.interval$s.mean ~ df.interval$interval,
+       ltext(x="Interval",y="Steps Mean of all the days"))
+df.interval.max <- max(df.interval$s.tot)
+df.interval %>% filter(s.tot == df.interval.max) %>% select(interval)
+```
+
 
 
 
 ## Imputing missing values
+```{r}
+length( df$steps[is.na(df$steps)] )
+```
 
+**NA Filling strategy: ** I use the mean of that interval.
 
+```{r}
+df.interval.mean <- df %>% filter(!is.na(steps)) %>% 
+  group_by(interval) %>% 
+  summarize(
+    s.mean = mean(steps))
+df.fillna <- merge(df,df.interval.mean) %>% 
+  mutate(steps.fillna = ifelse( is.na(steps) , s.mean, steps )) %>% 
+  select(steps.fillna, date, interval) %>% 
+  rename(steps = steps.fillna)
+df.total.fillna <- df.fillna %>% 
+  group_by(date) %>% 
+  summarize(
+    s.total = sum(steps))
+hist(df.total.fillna$s.total,
+  main="Total Number of Steps taken each day",
+  xlab="Steps for each day")
+mean(df.total.fillna$s.total)
+median(df.total.fillna$s.total)
+```
+
+Filling NA with the mean in interval, there aren't difference in the histogram.
+The only evidence is that median and mean are the same.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+Sys.setlocale("LC_TIME", "en_US")
+days.we <- c("Saturday","Sunday")
+df.fillna.wdwe <- df.fillna %>% 
+  mutate(wdwe = ifelse(weekdays(date) %in% days.we, "weekend","weekday")) %>% 
+  group_by(interval,wdwe) %>% 
+  summarize(s.mean = mean(steps)) 
+xyplot(df.fillna.wdwe$s.mean ~ df.fillna.wdwe$interval | df.fillna.wdwe$wdwe, type="l",
+       ltext(x="Interval",y="Steps Mean of all the days"))
+```
+
