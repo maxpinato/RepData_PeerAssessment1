@@ -7,53 +7,90 @@ output:
 
 
 ## Loading and preprocessing the data
+First I read the file "activity.csv" converting the date columns.
+Then I summarize by date in order to have the total steps of every single day of measurement.
 ```{r,echo=TRUE}
-require(dplyr)
+require(dplyr) 
 require(lattice)
 df <- read.csv2("activity.csv",sep=",")
 df$date = as.Date(df$date)
-df.total <- df %>% filter(!is.na(steps)) %>% 
-  group_by(date) %>% 
-  summarize(
+df.total <- df %>% 
+  filter(!is.na(steps)) %>% #remove NA
+  group_by(date) %>%        #calculate sum of steps by date
+  summarize(              
     s.total = sum(steps))
 ```
 
 ## What is mean total number of steps taken per day?
+Now, in order to show the distribution of steps in every day, I plot an histogram and show relative mean and median.
 ```{r,echo=TRUE}
 hist(df.total$s.total,main="Total Number of Steps taken each day",xlab="Steps for each day")
-mean(df.total$s.total)
-median(df.total$s.total)
+mean(df.total$s.total) # Show Mean
+median(df.total$s.total) # Show Median
 ```
 
 
 ## What is the average daily activity pattern?
+In order to show the daily activity pattern, I calculate the mean of steps for every days in each interval. 
+I still use data removing NA value from steps.
+
 ```{r,echo=TRUE}
-df.interval <- df %>% filter(!is.na(steps)) %>% group_by(interval) %>% summarize(s.mean = mean(steps),s.tot = sum(steps))
-xyplot(type="l",df.interval$s.mean ~ df.interval$interval,
-       ltext(x="Interval",y="Steps Mean of all the days"))
+df.interval <- df %>% 
+  filter(!is.na(steps)) %>% #remove NA steps
+  group_by(interval) %>%  #calculate mean step for every days in each interval
+  summarize(s.mean = mean(steps),s.tot = sum(steps)) #calculate mean and sum
+```
+
+I show the result as a plot with interval as x-axis and the steps mean for every days as y-axis.
+
+```{r,echo=TRUE}
+xyplot(type="l",df.interval$s.mean ~ df.interval$interval, 
+       xlab=list(label="Interval"),
+       ylab=list(label="Mean Steps across all the dates")
+       )
+```
+
+Now I show the interval in which there is the maximum number of steps for all the days.
+
+```{r,echo=TRUE}
 df.interval.max <- max(df.interval$s.tot)
 df.interval %>% filter(s.tot == df.interval.max) %>% select(interval)
 ```
 
 
-
-
 ## Imputing missing values
+
+First I show how many missing values there are for steps variable.
+
 ```{r}
 length( df$steps[is.na(df$steps)] )
 ```
 
+Now, I have to choose a filling strategy. I notice that there are days in which we haven't measure, otherwise all the intervals has measurement. So I choose to use mean of interval to fill the missing steps.
+
 **NA Filling strategy: ** I use the mean of that interval.
+
+First, I calculate a dataframe with interval and steps mean for all the days.
 
 ```{r}
 df.interval.mean <- df %>% filter(!is.na(steps)) %>% 
   group_by(interval) %>% 
   summarize(
     s.mean = mean(steps))
+```
+
+Then, I create a merge between the originale dataframe and the dataframe just created, in order to set the mean when the step is missing.
+
+```{r}
 df.fillna <- merge(df,df.interval.mean) %>% 
   mutate(steps.fillna = ifelse( is.na(steps) , s.mean, steps )) %>% 
   select(steps.fillna, date, interval) %>% 
   rename(steps = steps.fillna)
+```
+
+Now I can calculate totals and show them and the histogram of frequency.
+
+```{r}
 df.total.fillna <- df.fillna %>% 
   group_by(date) %>% 
   summarize(
@@ -70,14 +107,24 @@ The only evidence is that median and mean are the same.
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
+I have to calculate a factor variable with weekend and weekday.
+In order to prevent problems with my locale, I first set the temporary locale. With this, I can match the weekdays result with the string "Saturday" and "Sunday" in order to verify if the day is a weekday or a weekend.
+
 ```{r}
 Sys.setlocale("LC_TIME", "en_US")
 days.we <- c("Saturday","Sunday")
+```
+
+I create a new dataframe where I calculate a new variable "wdwe", set as "weekend" if the day is in "days.we", otherwise "weekday".
+Then I summarize a mean value by interval and plot dividing by "wdwe" in order to compare the activities during weekend versus weekday.
+
+```{r}
 df.fillna.wdwe <- df.fillna %>% 
   mutate(wdwe = ifelse(weekdays(date) %in% days.we, "weekend","weekday")) %>% 
   group_by(interval,wdwe) %>% 
   summarize(s.mean = mean(steps)) 
 xyplot(df.fillna.wdwe$s.mean ~ df.fillna.wdwe$interval | df.fillna.wdwe$wdwe, type="l",
-       ltext(x="Interval",y="Steps Mean of all the days"))
+       xlab=list(label="Interval"),
+       ylab=list(label="Mean Steps across all the dates"))
 ```
 
